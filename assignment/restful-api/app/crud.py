@@ -1,6 +1,8 @@
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 from datetime import datetime
+from typing import Optional  # ✅ 추가
+
 from app.models.user import User
 from app.models.book import Book
 from app.models.loan import Loan
@@ -40,7 +42,7 @@ def create_book(db: Session, **kwargs):
     db.refresh(book)
     return book
 
-def search_books(db: Session, category: str | None, available: bool | None):
+def search_books(db: Session, category: Optional[str], available: Optional[bool]):  # ✅ 수정
     q = db.query(Book)
     if category:
         q = q.filter(Book.category == category)
@@ -62,7 +64,6 @@ def borrow_book(db: Session, book_id: int, user_id: int):
     if book.available_copies <= 0:
         raise HTTPException(status_code=409, detail="no copies available")
 
-    # 이미 대출중인지(returned_at is null)
     existing = db.query(Loan).filter(
         Loan.book_id == book_id,
         Loan.user_id == user_id,

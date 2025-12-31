@@ -1,6 +1,7 @@
-from fastapi import FastAPI, Depends, Header, HTTPException, status
+from fastapi import FastAPI, Depends, Header, HTTPException
 from sqlalchemy.orm import Session
 from jose import jwt, JWTError
+from typing import Optional, List  # ✅ 추가
 
 from app.core.database import Base, engine
 from app.core.config import JWT_SECRET_KEY, JWT_ALGORITHM
@@ -18,10 +19,11 @@ app = FastAPI(title="Online Library Management API")
 
 def get_current_user(
     db: Session = Depends(get_db),
-    authorization: str | None = Header(default=None)
+    authorization: Optional[str] = Header(default=None)  # ✅ 수정
 ) -> User:
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
+
     token = authorization.split(" ", 1)[1]
     try:
         payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
@@ -56,8 +58,12 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
 def create_book(req: BookCreate, db: Session = Depends(get_db), _: User = Depends(require_admin)):
     return crud.create_book(db, **req.model_dump())
 
-@app.get("/books", response_model=list[BookOut])
-def get_books(category: str | None = None, available: bool | None = None, db: Session = Depends(get_db)):
+@app.get("/books", response_model=List[BookOut])  # ✅ 수정
+def get_books(
+    category: Optional[str] = None,  # ✅ 수정
+    available: Optional[bool] = None,  # ✅ 수정
+    db: Session = Depends(get_db)
+):
     return crud.search_books(db, category, available)
 
 @app.delete("/books/{book_id}", status_code=204)
@@ -68,21 +74,18 @@ def delete_book(book_id: int, db: Session = Depends(get_db), _: User = Depends(r
 # ---------- Loans ----------
 @app.post("/loans", response_model=LoanOut)
 def borrow(req: BorrowRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    # 과제 스펙상 user_id를 받지만, 인증 user와 동일한지 체크(보안/채점 포인트)
     if req.user_id != user.id:
         raise HTTPException(status_code=403, detail="user_id does not match token user")
     return crud.borrow_book(db, req.book_id, req.user_id)
 
-@app.get("/users/me/loans", response_model=list[LoanOut])
+@app.get("/users/me/loans", response_model=List[LoanOut])  # ✅ 수정
 def my_loans(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     return crud.list_my_loans(db, user.id)
 
-# 반납을 DELETE로 요구할 수도 있어서 둘 다 제공(과제 스펙에 맞게 하나만 남겨도 됨)
 @app.post("/loans/{loan_id}/return", response_model=LoanOut)
 def return_book(loan_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     return crud.return_loan(db, loan_id, user.id)
 
 @app.delete("/loans/{loan_id}", response_model=LoanOut)
 def delete_loan_as_return(loan_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    # 실제 삭제 대신 반납 처리
     return crud.return_loan(db, loan_id, user.id)
