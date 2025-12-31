@@ -36,11 +36,6 @@ def get_current_user(
         raise HTTPException(status_code=401, detail="User not found")
     return user
 
-def require_admin(user: User = Depends(get_current_user)) -> User:
-    if user.role != "ADMIN":
-        raise HTTPException(status_code=403, detail="Admin only")
-    return user
-
 # ---------- Auth ----------
 @app.post("/auth/signup")
 def signup(req: SignupRequest, db: Session = Depends(get_db)):
@@ -50,12 +45,12 @@ def signup(req: SignupRequest, db: Session = Depends(get_db)):
 @app.post("/auth/login", response_model=TokenResponse)
 def login(req: LoginRequest, db: Session = Depends(get_db)):
     user = crud.authenticate(db, req.username, req.password)
-    token = create_access_token(subject=str(user.id), role=user.role)
+    token = create_access_token(subject=str(user.id))
     return TokenResponse(access_token=token)
 
 # ---------- Books ----------
 @app.post("/books", response_model=BookOut)
-def create_book(req: BookCreate, db: Session = Depends(get_db), _: User = Depends(require_admin)):
+def create_book(req: BookCreate, db: Session = Depends(get_db)):
     return crud.create_book(db, **req.model_dump())
 
 @app.get("/books", response_model=List[BookOut])  # ✅ 수정
@@ -67,7 +62,7 @@ def get_books(
     return crud.search_books(db, category, available)
 
 @app.delete("/books/{book_id}", status_code=204)
-def delete_book(book_id: int, db: Session = Depends(get_db), _: User = Depends(require_admin)):
+def delete_book(book_id: int, db: Session = Depends(get_db)):
     crud.delete_book(db, book_id)
     return None
 
